@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import date, timedelta
 
 from common import (
     build_envelope,
@@ -31,13 +32,21 @@ SOURCES_CONFIG_PATH = getenv_str(
 HISTORY_START_DATE = os.getenv("HISTORY_START_DATE", "").strip()
 HISTORY_END_DATE = os.getenv("HISTORY_END_DATE", "").strip()
 HISTORICAL_RUN_ONCE = getenv_bool("HISTORICAL_RUN_ONCE", False)
+HISTORICAL_DATE_CURSOR_ENABLED = getenv_bool("HISTORICAL_DATE_CURSOR_ENABLED", False)
 
 
-def build_date_range_query() -> str:
-    if not (HISTORY_START_DATE and HISTORY_END_DATE):
+def parse_iso_date(label: str, value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} must be YYYY-MM-DD, got {value!r}") from exc
+
+
+def build_date_range_query(history_start_date: str, history_end_date: str) -> str:
+    if not (history_start_date and history_end_date):
         return ""
-    compact_start = HISTORY_START_DATE.replace("-", "")
-    compact_end = HISTORY_END_DATE.replace("-", "")
+    compact_start = history_start_date.replace("-", "")
+    compact_end = history_end_date.replace("-", "")
     return f"{compact_start}-{compact_end}"
 
 
@@ -49,8 +58,20 @@ def main() -> None:
         "base_url",
         "https://site.api.espn.com/apis/site/v2/sports/soccer",
     )
-    date_range_query = build_date_range_query()
-    stop_after_first_loop = bool(HISTORICAL_RUN_ONCE and date_range_query)
+    historical_mode = bool(HISTORY_START_DATE and HISTORY_END_DATE)
+    stop_after_first_loop = bool(
+        HISTORICAL_RUN_ONCE and historical_mode and not HISTORICAL_DATE_CURSOR_ENABLED
+    )
+    history_start_date_obj: date | None = None
+    history_end_date_obj: date | None = None
+    current_cursor_date_obj: date | None = None
+    if historical_mode:
+        history_start_date_obj = parse_iso_date("HISTORY_START_DATE", HISTORY_START_DATE)
+        history_end_date_obj = parse_iso_date("HISTORY_END_DATE", HISTORY_END_DATE)
+        if history_start_date_obj > history_end_date_obj:
+            raise ValueError("HISTORY_START_DATE must be <= HISTORY_END_DATE")
+        if HISTORICAL_DATE_CURSOR_ENABLED:
+            current_cursor_date_obj = history_start_date_obj
 
     producer = build_kafka_producer(KAFKA_BOOTSTRAP_SERVERS)
     seen_idempotency_keys: dict[str, float] = {}
@@ -88,6 +109,19 @@ def main() -> None:
         metrics_window_started_at = now_monotonic
 
     while True:
+        loop_history_start_date = HISTORY_START_DATE
+        loop_history_end_date = HISTORY_END_DATE
+        if historical_mode and HISTORICAL_DATE_CURSOR_ENABLED:
+            assert current_cursor_date_obj is not None
+            current_iso_date = current_cursor_date_obj.isoformat()
+            loop_history_start_date = current_iso_date
+            loop_history_end_date = current_iso_date
+            print(
+                f"[football] historical cursor day={current_iso_date}",
+                flush=True,
+            )
+        date_range_query = build_date_range_query(loop_history_start_date, loop_history_end_date)
+
         loop_started_at = time.monotonic()
         for league in leagues:
             league_code = league["league_code"]
@@ -97,9 +131,9 @@ def main() -> None:
                 "country": league.get("country"),
                 "league_code": league_code,
                 "league_name": league.get("league_name"),
-                "historical_mode": bool(date_range_query),
-                "start_date": HISTORY_START_DATE or None,
-                "end_date": HISTORY_END_DATE or None,
+                "historical_mode": historical_mode,
+                "start_date": loop_history_start_date or None,
+                "end_date": loop_history_end_date or None,
             }
             try:
                 request_started_at = time.monotonic()
@@ -173,6 +207,20 @@ def main() -> None:
                 publish_metrics_if_due(time.monotonic())
         loop_elapsed = time.monotonic() - loop_started_at
         print(f"[football] ingestion loop completed in {loop_elapsed:.2f}s", flush=True)
+        if historical_mode and HISTORICAL_DATE_CURSOR_ENABLED:
+            assert current_cursor_date_obj is not None
+            assert history_end_date_obj is not None
+            if current_cursor_date_obj >= history_end_date_obj:
+                print(
+                    "[football] historical cursor reached HISTORY_END_DATE; exiting producer",
+                    flush=True,
+                )
+                break
+            current_cursor_date_obj = current_cursor_date_obj + timedelta(days=1)
+            next_cursor_iso = current_cursor_date_obj.isoformat()
+            print(f"[football] advancing historical cursor to {next_cursor_iso}", flush=True)
+            sleep_seconds(POLL_INTERVAL_SECONDS)
+            continue
         if stop_after_first_loop:
             print(
                 "[football] HISTORICAL_RUN_ONCE=true and historical dates configured; exiting after first loop",

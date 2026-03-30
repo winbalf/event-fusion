@@ -134,7 +134,7 @@
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT 'home_wins' AS result_type, SUM(home_wins) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nUNION ALL\nSELECT 'away_wins' AS result_type, SUM(away_wins) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nUNION ALL\nSELECT 'draws' AS result_type, SUM(draws) AS value\nFROM `event_fusion.fct_daily_weather_sports`",
+          "rawSql": "SELECT\n  CAST(SUM(home_wins) AS FLOAT64) AS home_wins,\n  CAST(SUM(away_wins) AS FLOAT64) AS away_wins,\n  CAST(SUM(draws) AS FLOAT64) AS draws\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))",
           "refId": "A"
         }
       ],

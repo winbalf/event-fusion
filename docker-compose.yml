@@ -121,7 +121,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
       - PRODUCER_TOPIC=raw.weather.v1
       - DLQ_TOPIC=dlq.weather.v1
-      - POLL_INTERVAL_SECONDS=60
+      - POLL_INTERVAL_SECONDS=${PRODUCER_POLL_INTERVAL_SECONDS:-60}
       - RETRY_WAIT_SECONDS=10
       - MAX_RETRIES=3
       - RETRY_BACKOFF_BASE_SECONDS=2
@@ -131,6 +131,7 @@ services:
       - HISTORY_START_DATE=${HISTORY_START_DATE}
       - HISTORY_END_DATE=${HISTORY_END_DATE}
       - HISTORICAL_RUN_ONCE=${HISTORICAL_RUN_ONCE:-false}
+      - HISTORICAL_DATE_CURSOR_ENABLED=${HISTORICAL_DATE_CURSOR_ENABLED:-false}
     command: ["python", "-u", "/app/src/producers/weather_producer.py"]
     volumes:
       - ./src:/app/src
@@ -149,7 +150,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
       - PRODUCER_TOPIC=raw.football.v1
       - DLQ_TOPIC=dlq.football.v1
-      - POLL_INTERVAL_SECONDS=60
+      - POLL_INTERVAL_SECONDS=${PRODUCER_POLL_INTERVAL_SECONDS:-60}
       - RETRY_WAIT_SECONDS=10
       - MAX_RETRIES=3
       - RETRY_BACKOFF_BASE_SECONDS=2
@@ -159,6 +160,7 @@ services:
       - HISTORY_START_DATE=${HISTORY_START_DATE}
       - HISTORY_END_DATE=${HISTORY_END_DATE}
       - HISTORICAL_RUN_ONCE=${HISTORICAL_RUN_ONCE:-false}
+      - HISTORICAL_DATE_CURSOR_ENABLED=${HISTORICAL_DATE_CURSOR_ENABLED:-false}
     command: ["python", "-u", "/app/src/producers/football_producer.py"]
     volumes:
       - ./src:/app/src

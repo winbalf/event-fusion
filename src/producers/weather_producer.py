@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import date, timedelta
 
 from common import (
     build_envelope,
@@ -39,9 +40,22 @@ WEATHER_HOURLY_VARS = getenv_str(
     "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code,cloud_cover",
 )
 HISTORICAL_RUN_ONCE = getenv_bool("HISTORICAL_RUN_ONCE", False)
+HISTORICAL_DATE_CURSOR_ENABLED = getenv_bool("HISTORICAL_DATE_CURSOR_ENABLED", False)
 
 
-def build_request_params(location: dict[str, str], historical_mode: bool) -> dict[str, str]:
+def parse_iso_date(label: str, value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} must be YYYY-MM-DD, got {value!r}") from exc
+
+
+def build_request_params(
+    location: dict[str, str],
+    historical_mode: bool,
+    history_start_date: str,
+    history_end_date: str,
+) -> dict[str, str]:
     timezone = location.get("timezone", "auto")
     params = {
         "latitude": str(location["latitude"]),
@@ -49,8 +63,8 @@ def build_request_params(location: dict[str, str], historical_mode: bool) -> dic
         "timezone": timezone,
     }
     if historical_mode:
-        params["start_date"] = HISTORY_START_DATE
-        params["end_date"] = HISTORY_END_DATE
+        params["start_date"] = history_start_date
+        params["end_date"] = history_end_date
         params["hourly"] = WEATHER_HOURLY_VARS
     else:
         params["current"] = WEATHER_CURRENT_VARS
@@ -70,8 +84,20 @@ def main() -> None:
         "https://archive-api.open-meteo.com/v1/archive",
     )
     historical_mode = bool(HISTORY_START_DATE and HISTORY_END_DATE)
-    stop_after_first_loop = bool(HISTORICAL_RUN_ONCE and historical_mode)
+    stop_after_first_loop = bool(
+        HISTORICAL_RUN_ONCE and historical_mode and not HISTORICAL_DATE_CURSOR_ENABLED
+    )
     selected_api_url = archive_api_url if historical_mode else forecast_api_url
+    history_start_date_obj: date | None = None
+    history_end_date_obj: date | None = None
+    current_cursor_date_obj: date | None = None
+    if historical_mode:
+        history_start_date_obj = parse_iso_date("HISTORY_START_DATE", HISTORY_START_DATE)
+        history_end_date_obj = parse_iso_date("HISTORY_END_DATE", HISTORY_END_DATE)
+        if history_start_date_obj > history_end_date_obj:
+            raise ValueError("HISTORY_START_DATE must be <= HISTORY_END_DATE")
+        if HISTORICAL_DATE_CURSOR_ENABLED:
+            current_cursor_date_obj = history_start_date_obj
 
     producer = build_kafka_producer(KAFKA_BOOTSTRAP_SERVERS)
     seen_idempotency_keys: dict[str, float] = {}
@@ -109,6 +135,18 @@ def main() -> None:
         metrics_window_started_at = now_monotonic
 
     while True:
+        loop_history_start_date = HISTORY_START_DATE
+        loop_history_end_date = HISTORY_END_DATE
+        if historical_mode and HISTORICAL_DATE_CURSOR_ENABLED:
+            assert current_cursor_date_obj is not None
+            current_iso_date = current_cursor_date_obj.isoformat()
+            loop_history_start_date = current_iso_date
+            loop_history_end_date = current_iso_date
+            print(
+                f"[weather] historical cursor day={current_iso_date}",
+                flush=True,
+            )
+
         loop_started_at = time.monotonic()
         for location in locations:
             metadata = {
@@ -118,11 +156,16 @@ def main() -> None:
                 "longitude": location.get("longitude"),
                 "timezone": location.get("timezone", "auto"),
                 "historical_mode": historical_mode,
-                "start_date": HISTORY_START_DATE or None,
-                "end_date": HISTORY_END_DATE or None,
+                "start_date": loop_history_start_date or None,
+                "end_date": loop_history_end_date or None,
             }
             try:
-                request_params = build_request_params(location, historical_mode)
+                request_params = build_request_params(
+                    location,
+                    historical_mode,
+                    loop_history_start_date,
+                    loop_history_end_date,
+                )
                 request_started_at = time.monotonic()
                 payload, attempts_used = retry_with_backoff(
                     lambda: fetch_json(
@@ -198,6 +241,20 @@ def main() -> None:
                 publish_metrics_if_due(time.monotonic())
         loop_elapsed = time.monotonic() - loop_started_at
         print(f"[weather] ingestion loop completed in {loop_elapsed:.2f}s", flush=True)
+        if historical_mode and HISTORICAL_DATE_CURSOR_ENABLED:
+            assert current_cursor_date_obj is not None
+            assert history_end_date_obj is not None
+            if current_cursor_date_obj >= history_end_date_obj:
+                print(
+                    "[weather] historical cursor reached HISTORY_END_DATE; exiting producer",
+                    flush=True,
+                )
+                break
+            current_cursor_date_obj = current_cursor_date_obj + timedelta(days=1)
+            next_cursor_iso = current_cursor_date_obj.isoformat()
+            print(f"[weather] advancing historical cursor to {next_cursor_iso}", flush=True)
+            sleep_seconds(POLL_INTERVAL_SECONDS)
+            continue
         if stop_after_first_loop:
             print(
                 "[weather] HISTORICAL_RUN_ONCE=true and historical dates configured; exiting after first loop",

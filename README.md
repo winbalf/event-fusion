@@ -1,6 +1,7 @@
 # Event Fusion: Weather x Football Streaming Analytics
 
 Event Fusion is an end-to-end data engineering project that joins daily weather conditions with football activity to create analytics-ready datasets and dashboards.
+It can also run in a day-by-day simulation mode that mimics continuous daily ingestion, so the stack behaves like a streaming pipeline with controllable cadence.
 
 It is built as a practical, production-style pipeline: stream ingestion, raw persistence, warehouse modeling, data quality checks, and BI reporting.
 
@@ -133,6 +134,8 @@ Set values in `.env`:
 - `HISTORY_START_DATE`
 - `HISTORY_END_DATE`
 - `HISTORICAL_RUN_ONCE` (optional: set `true` to run one historical pass and exit producers)
+- `HISTORICAL_DATE_CURSOR_ENABLED` (optional: set `true` to process one day per loop from start to end date)
+- `PRODUCER_POLL_INTERVAL_SECONDS` (optional: delay between loops; set `86400` for daily cadence)
 - `PRODUCER_RESTART_POLICY` (optional: set `no` when using run-once mode)
 
 ### 3) Build and run
@@ -141,6 +144,18 @@ Set values in `.env`:
 docker compose build weather-producer football-producer parquet-writer
 docker compose up -d
 ```
+
+### Historical Cursor Mode (Day-by-Day)
+
+To process a bounded historical window day-by-day (instead of requesting the whole range each loop), set:
+
+- `HISTORY_START_DATE=YYYY-MM-DD`
+- `HISTORY_END_DATE=YYYY-MM-DD`
+- `HISTORICAL_DATE_CURSOR_ENABLED=true`
+- `HISTORICAL_RUN_ONCE=false`
+- `PRODUCER_POLL_INTERVAL_SECONDS=86400` (real daily run) or lower for fast backfill
+
+In this mode, each producer loop queries exactly one day (`start_date=end_date=cursor_day`), advances the cursor by one day, and exits automatically after reaching `HISTORY_END_DATE`.
 
 ### 4) Validate ingestion
 
