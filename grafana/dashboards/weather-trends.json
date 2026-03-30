@@ -1,0 +1,215 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  TIMESTAMP(date_day) AS time,\n  country AS metric,\n  CAST(AVG(avg_temperature_c) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Temperature by Country",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  MAX(date_day) AS snapshot_day,\n  SUM(weather_observations) AS observations_total,\n  SUM(weather_cities_covered) AS covered_cities_total\nFROM `event_fusion.fct_daily_weather_sports`",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Weather Coverage Snapshot",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  TIMESTAMP(date_day) AS time,\n  country AS metric,\n  CAST(SUM(total_precipitation_mm) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Precipitation by Country",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_day,\n  country,\n  ROUND(AVG(avg_temperature_c), 2) AS avg_temperature_c,\n  ROUND(AVG(avg_relative_humidity_pct), 2) AS avg_relative_humidity_pct,\n  ROUND(SUM(total_precipitation_mm), 2) AS total_precipitation_mm,\n  ROUND(AVG(avg_wind_speed_10m), 2) AS avg_wind_speed_10m\nFROM `event_fusion.fct_daily_weather_sports`\nGROUP BY 1, 2\nORDER BY date_day DESC, country",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily Country Weather Table",
+      "type": "table"
+    }
+  ],
+  "refresh": "10m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "event-fusion",
+    "weather"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Event Fusion - Weather Trends",
+  "uid": "eventfusion-weather",
+  "version": 2,
+  "weekStart": ""
+}

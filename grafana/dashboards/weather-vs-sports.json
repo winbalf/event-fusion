@@ -1,0 +1,153 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  TIMESTAMP(date_day) AS time,\n  CONCAT(country, ' | precip_mm') AS metric,\n  CAST(SUM(total_precipitation_mm) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nUNION ALL\nSELECT\n  TIMESTAMP(date_day) AS time,\n  CONCAT(country, ' | goals') AS metric,\n  CAST(SUM(total_goals) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Precipitation vs Goals (Daily)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  country,\n  league_name,\n  ROUND(AVG(avg_temperature_c), 2) AS avg_temp_c,\n  ROUND(AVG(total_precipitation_mm), 2) AS avg_precip_mm,\n  ROUND(AVG(avg_goals_per_match), 2) AS avg_goals_per_match,\n  ROUND(AVG(goals_per_precip_mm), 3) AS avg_goals_per_precip_mm\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE has_weather_data = TRUE\nGROUP BY 1, 2\nORDER BY avg_goals_per_precip_mm DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Weather vs Goal Rate by League",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 3,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_day,\n  country,\n  league_name,\n  total_goals,\n  matches_count,\n  ROUND(avg_temperature_c, 2) AS avg_temperature_c,\n  ROUND(total_precipitation_mm, 2) AS total_precipitation_mm,\n  ROUND(goals_per_precip_mm, 3) AS goals_per_precip_mm\nFROM `event_fusion.fct_daily_weather_sports`\nORDER BY date_day DESC, country, league_name",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily Combined Fact Table View",
+      "type": "table"
+    }
+  ],
+  "refresh": "10m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "event-fusion",
+    "combined"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Event Fusion - Weather vs Sports",
+  "uid": "eventfusion-combined",
+  "version": 2,
+  "weekStart": ""
+}

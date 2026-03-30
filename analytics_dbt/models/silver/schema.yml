@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_weather
+    description: Typed silver weather observations parsed from bronze raw weather envelopes.
+    columns:
+      - name: idempotency_key
+        tests:
+          - not_null:
+              config:
+                where: "schema_version is not null"
+      - name: city
+        tests:
+          - not_null
+      - name: country
+        tests:
+          - not_null
+      - name: observed_at_utc
+        tests:
+          - not_null
+
+  - name: stg_football
+    description: Typed silver football event rows parsed from bronze ESPN scoreboard envelopes.
+    columns:
+      - name: idempotency_key
+        tests:
+          - not_null:
+              config:
+                where: "schema_version is not null"
+      - name: league_code
+        tests:
+          - not_null
+      - name: event_id
+        tests:
+          - not_null
+      - name: event_start_utc
+        tests:
+          - not_null:
+              config:
+                where: "event_id is not null"

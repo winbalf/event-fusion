@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: fct_daily_weather_sports
+    description: Combined daily mart joining country-level weather features with league-level football features.
+    columns:
+      - name: mart_row_id
+        tests:
+          - not_null
+          - unique
+      - name: date_day
+        tests:
+          - not_null
+      - name: country
+        tests:
+          - not_null
+      - name: league_code
+        tests:
+          - not_null
+      - name: matches_count
+        tests:
+          - not_null
+      - name: total_goals
+        tests:
+          - not_null

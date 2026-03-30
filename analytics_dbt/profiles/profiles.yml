@@ -1,0 +1,13 @@
+event_fusion:
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: "{{ env_var('BIGQUERY_DATASET') }}"
+      keyfile: /gcp/gcs.json
+      threads: 4
+      timeout_seconds: 300
+      location: us-central1
+      priority: interactive
+  target: dev

@@ -1,0 +1,49 @@
+{
+  "weather": {
+    "forecast_api_url": "https://api.open-meteo.com/v1/forecast",
+    "archive_api_url": "https://archive-api.open-meteo.com/v1/archive",
+    "locations": [
+      {
+        "country": "England",
+        "city": "London",
+        "latitude": 51.5085,
+        "longitude": -0.1257,
+        "timezone": "Europe/London"
+      },
+      {
+        "country": "Spain",
+        "city": "Madrid",
+        "latitude": 40.4168,
+        "longitude": -3.7038,
+        "timezone": "Europe/Madrid"
+      },
+      {
+        "country": "Italy",
+        "city": "Rome",
+        "latitude": 41.9028,
+        "longitude": 12.4964,
+        "timezone": "Europe/Rome"
+      }
+    ]
+  },
+  "football": {
+    "base_url": "https://site.api.espn.com/apis/site/v2/sports/soccer",
+    "leagues": [
+      {
+        "country": "England",
+        "league_code": "eng.1",
+        "league_name": "Premier League"
+      },
+      {
+        "country": "Spain",
+        "league_code": "esp.1",
+        "league_name": "LaLiga"
+      },
+      {
+        "country": "Italy",
+        "league_code": "ita.1",
+        "league_name": "Serie A"
+      }
+    ]
+  }
+}

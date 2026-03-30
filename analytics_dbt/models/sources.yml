@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('BIGQUERY_DATASET') }}"
+    tables:
+      - name: weather_raw
+        identifier: "{{ var('bronze_weather_table', 'bronze_weather_raw') }}"
+      - name: football_raw
+        identifier: "{{ var('bronze_football_table', 'bronze_football_raw') }}"

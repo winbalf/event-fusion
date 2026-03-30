@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: int_daily_weather
+    description: Daily weather feature aggregates by date, country, and city.
+    columns:
+      - name: date_day
+        tests:
+          - not_null
+      - name: country
+        tests:
+          - not_null
+      - name: city
+        tests:
+          - not_null
+      - name: weather_observations
+        tests:
+          - not_null
+
+  - name: int_daily_football
+    description: Daily football feature aggregates by date, country, and league.
+    columns:
+      - name: date_day
+        tests:
+          - not_null
+      - name: league_code
+        tests:
+          - not_null
+      - name: matches_count
+        tests:
+          - not_null
+      - name: total_goals
+        tests:
+          - not_null

@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: EventFusion BigQuery
+    uid: event_fusion_bigquery
+    type: grafana-bigquery-datasource
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      authenticationType: gce
+      defaultProject: ${GCP_PROJECT_ID}
+      defaultDataset: ${BIGQUERY_DATASET}

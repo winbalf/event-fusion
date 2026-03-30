@@ -1,0 +1,239 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:v25.3.9
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "1"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --pandaproxy-addr
+      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - PLAINTEXT://redpanda:28082,OUTSIDE://localhost:8082
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda:33145
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+      - "8082:8082"
+      - "28082:28082"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info -X brokers=localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  redpanda-init:
+    image: redpandadata/redpanda:v25.3.9
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        rpk topic create raw.weather.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=604800000 || true
+        rpk topic create raw.football.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=604800000 || true
+        rpk topic create dlq.weather.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=2592000000 || true
+        rpk topic create dlq.football.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=2592000000 || true
+        rpk topic create silver.weather.daily.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=1209600000 || true
+        rpk topic create silver.football.daily.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=1209600000 || true
+        rpk topic create mart.weather_football.daily.v1 -X brokers=redpanda:29092 --partitions 3 --replicas 1 --config retention.ms=1209600000 || true
+    restart: "no"
+
+  jobmanager:
+    image: flink:1.19.1-scala_2.12-java17
+    command: jobmanager
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    expose:
+      - "6123"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/gcs.json
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        jobmanager.memory.process.size: 1600m
+        state.backend: filesystem
+        state.checkpoints.dir: gs://${GCS_BUCKET}/flink-checkpoints
+        execution.checkpointing.interval: 30000
+        execution.checkpointing.mode: EXACTLY_ONCE
+        fs.gs.project.id: ${GCP_PROJECT_ID}
+        fs.gs.auth.service.account.enable: true
+        fs.gs.auth.service.account.json.keyfile: /gcp/gcs.json
+    volumes:
+      - ./flink/jobs:/opt/flink/usrlib
+      - ./keys:/gcp:ro
+
+  taskmanager:
+    image: flink:1.19.1-scala_2.12-java17
+    command: taskmanager
+    depends_on:
+      - jobmanager
+    expose:
+      - "6121"
+      - "6122"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/gcs.json
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.memory.process.size: 1728m
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+        state.backend: filesystem
+        state.checkpoints.dir: gs://${GCS_BUCKET}/flink-checkpoints
+        fs.gs.project.id: ${GCP_PROJECT_ID}
+        fs.gs.auth.service.account.enable: true
+        fs.gs.auth.service.account.json.keyfile: /gcp/gcs.json
+    volumes:
+      - ./flink/jobs:/opt/flink/usrlib
+      - ./keys:/gcp:ro
+
+  weather-producer:
+    build:
+      context: .
+      dockerfile: docker/producers.Dockerfile
+    image: event-fusion/producers:local
+    working_dir: /app
+    depends_on:
+      - redpanda
+      - redpanda-init
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
+      - PRODUCER_TOPIC=raw.weather.v1
+      - DLQ_TOPIC=dlq.weather.v1
+      - POLL_INTERVAL_SECONDS=60
+      - RETRY_WAIT_SECONDS=10
+      - MAX_RETRIES=3
+      - RETRY_BACKOFF_BASE_SECONDS=2
+      - PUBLISH_DEDUP_TTL_SECONDS=3600
+      - METRICS_LOG_EVERY_SECONDS=60
+      - SOURCES_CONFIG_PATH=/app/src/producers/sources.json
+      - HISTORY_START_DATE=${HISTORY_START_DATE}
+      - HISTORY_END_DATE=${HISTORY_END_DATE}
+      - HISTORICAL_RUN_ONCE=${HISTORICAL_RUN_ONCE:-false}
+    command: ["python", "-u", "/app/src/producers/weather_producer.py"]
+    volumes:
+      - ./src:/app/src
+    restart: ${PRODUCER_RESTART_POLICY:-unless-stopped}
+
+  football-producer:
+    build:
+      context: .
+      dockerfile: docker/producers.Dockerfile
+    image: event-fusion/producers:local
+    working_dir: /app
+    depends_on:
+      - redpanda
+      - redpanda-init
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
+      - PRODUCER_TOPIC=raw.football.v1
+      - DLQ_TOPIC=dlq.football.v1
+      - POLL_INTERVAL_SECONDS=60
+      - RETRY_WAIT_SECONDS=10
+      - MAX_RETRIES=3
+      - RETRY_BACKOFF_BASE_SECONDS=2
+      - PUBLISH_DEDUP_TTL_SECONDS=3600
+      - METRICS_LOG_EVERY_SECONDS=60
+      - SOURCES_CONFIG_PATH=/app/src/producers/sources.json
+      - HISTORY_START_DATE=${HISTORY_START_DATE}
+      - HISTORY_END_DATE=${HISTORY_END_DATE}
+      - HISTORICAL_RUN_ONCE=${HISTORICAL_RUN_ONCE:-false}
+    command: ["python", "-u", "/app/src/producers/football_producer.py"]
+    volumes:
+      - ./src:/app/src
+    restart: ${PRODUCER_RESTART_POLICY:-unless-stopped}
+
+  parquet-writer:
+    build:
+      context: .
+      dockerfile: docker/parquet-writer.Dockerfile
+    image: event-fusion/parquet-writer:local
+    working_dir: /app
+    depends_on:
+      - redpanda
+      - redpanda-init
+      - weather-producer
+      - football-producer
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:29092
+      - KAFKA_TOPICS=raw.weather.v1,raw.football.v1
+      - KAFKA_GROUP_ID=parquet-writer-v1
+      - KAFKA_AUTO_OFFSET_RESET=earliest
+      - KAFKA_POLL_TIMEOUT_MS=1000
+      - MAX_BATCH_ROWS_PER_TOPIC=100
+      - MIN_FLUSH_ROWS_PER_TOPIC=25
+      - FLUSH_INTERVAL_SECONDS=30
+      - FORCE_FLUSH_INTERVAL_SECONDS=180
+      - GCS_BUCKET=${GCS_BUCKET}
+      - GCS_PREFIX=bronze
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/gcs.json
+    command: ["python", "-u", "/app/src/sinks/kafka_to_gcs_parquet.py"]
+    volumes:
+      - ./src:/app/src
+      - ./keys:/gcp:ro
+    restart: unless-stopped
+
+  dbt:
+    image: python:3.11-slim
+    working_dir: /usr/app
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/gcs.json
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCS_BUCKET=${GCS_BUCKET}
+      - BIGQUERY_DATASET=${BIGQUERY_DATASET}
+      - DBT_PROFILES_DIR=/root/.dbt
+    command: >
+      /bin/bash -c "
+      pip install --no-cache-dir dbt-bigquery &&
+      tail -f /dev/null
+      "
+    volumes:
+      - ./analytics_dbt:/usr/app
+      - ./analytics_dbt/profiles:/root/.dbt
+      - ./keys:/gcp:ro
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-bigquery-datasource
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/gcs.json
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - BIGQUERY_DATASET=${BIGQUERY_DATASET}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./keys:/gcp:ro
+
+volumes:
+  grafana-data:

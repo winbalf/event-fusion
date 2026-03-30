@@ -1,0 +1,207 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  TIMESTAMP(date_day) AS time,\n  league_name AS metric,\n  CAST(SUM(total_goals) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Goals by League",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  league_name,\n  SUM(matches_count) AS matches,\n  SUM(completed_matches_count) AS completed,\n  SUM(scheduled_matches_count) AS scheduled,\n  SUM(in_progress_matches_count) AS in_progress,\n  ROUND(AVG(avg_goals_per_match), 2) AS avg_goals_per_match\nFROM `event_fusion.fct_daily_weather_sports`\nGROUP BY league_name\nORDER BY matches DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "League Match Status Rollup",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT 'home_wins' AS result_type, SUM(home_wins) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nUNION ALL\nSELECT 'away_wins' AS result_type, SUM(away_wins) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nUNION ALL\nSELECT 'draws' AS result_type, SUM(draws) AS value\nFROM `event_fusion.fct_daily_weather_sports`",
+          "refId": "A"
+        }
+      ],
+      "title": "Match Outcome Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-bigquery-datasource",
+        "uid": "event_fusion_bigquery"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  TIMESTAMP(date_day) AS time,\n  country AS metric,\n  CAST(SUM(matches_count) AS FLOAT64) AS value\nFROM `event_fusion.fct_daily_weather_sports`\nWHERE $__timeFilter(TIMESTAMP(date_day))\nGROUP BY 1, 2\nORDER BY 1, 2",
+          "refId": "A"
+        }
+      ],
+      "title": "Matches per Day by Country",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "event-fusion",
+    "football"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Event Fusion - Football Performance",
+  "uid": "eventfusion-football",
+  "version": 2,
+  "weekStart": ""
+}
